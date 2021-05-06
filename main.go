@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"image/color"
 	"io/ioutil"
 	"log"
 	"math"
@@ -9,132 +9,23 @@ import (
 	"os"
 	"time"
 
-	"github.com/gdamore/tcell/v2"
+	"github.com/hajimehoshi/ebiten/v2"
 )
 
 func main() {
 	programName := os.Args[1]
 	chip := NewChip8()
 
-	fmt.Println("Loading application...")
 	chip.loadApplication(programName)
-	fmt.Println("Loaded application.")
 
-	gfx(&chip)
-}
-
-func gfx(c8 *Chip8) {
-	s, e := tcell.NewScreen()
-	if e != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", e)
-		os.Exit(1)
-	}
-	if e = s.Init(); e != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", e)
-		os.Exit(1)
+	// Specify the window size as you like. Here, a doubled size is specified.
+	ebiten.SetWindowSize(gfxWidth, gfxHeight)
+	ebiten.SetWindowTitle(programName)
+	// Call ebiten.RunGame to start your game loop.
+	if err := ebiten.RunGame(&chip); err != nil {
+		log.Fatal(err)
 	}
 
-	s.SetStyle(tcell.StyleDefault.
-		Foreground(tcell.ColorBlack).
-		Background(tcell.ColorWhite))
-	s.Clear()
-
-	quit := make(chan struct{})
-	go func() {
-		for {
-			ev := s.PollEvent()
-			switch ev := ev.(type) {
-			case *tcell.EventKey:
-				switch ev.Key() {
-				case tcell.KeyEscape:
-					close(quit)
-					return
-				case tcell.KeyCtrlL:
-					s.Sync()
-				}
-				switch ev.Rune() {
-				case '1':
-					c8.Key = [16]uint8{}
-					c8.Key[0x1] = 1
-				case '2':
-					c8.Key = [16]uint8{}
-					c8.Key[0x2] = 1
-				case '3':
-					c8.Key = [16]uint8{}
-					c8.Key[0x3] = 1
-				case '4':
-					c8.Key = [16]uint8{}
-					c8.Key[0xC] = 1
-				case 'q':
-					c8.Key = [16]uint8{}
-					c8.Key[0x4] = 1
-				case 'w':
-					c8.Key = [16]uint8{}
-					c8.Key[0x5] = 1
-				case 'e':
-					c8.Key = [16]uint8{}
-					c8.Key[0x6] = 1
-				case 'r':
-					c8.Key = [16]uint8{}
-					c8.Key[0xD] = 1
-				case 'a':
-					c8.Key = [16]uint8{}
-					c8.Key[0x7] = 1
-				case 's':
-					c8.Key = [16]uint8{}
-					c8.Key[0x8] = 1
-				case 'd':
-					c8.Key = [16]uint8{}
-					c8.Key[0x9] = 1
-				case 'f':
-					c8.Key = [16]uint8{}
-					c8.Key[0xE] = 1
-				case 'z':
-					c8.Key = [16]uint8{}
-					c8.Key[0xA] = 1
-				case 'x':
-					c8.Key = [16]uint8{}
-					c8.Key[0x0] = 1
-				case 'c':
-					c8.Key = [16]uint8{}
-					c8.Key[0xB] = 1
-				case 'v':
-					c8.Key = [16]uint8{}
-					c8.Key[0xF] = 1
-				}
-			case *tcell.EventResize:
-				s.Sync()
-			}
-		}
-	}()
-
-loop:
-	for {
-		select {
-		case <-quit:
-			break loop
-		case <-time.After(time.Millisecond * 16):
-		}
-
-		for row := 0; row < screenHeight; row++ {
-			for col := 0; col < screenWidth; col++ {
-				isOn := c8.GFX[(row*screenWidth)+col] == 1
-				var cellToUse tcell.Style
-				if isOn {
-					onPixel := tcell.NewHexColor(0xFFFFFF)
-					cellToUse = tcell.StyleDefault.Background(onPixel)
-				} else {
-					offPixel := tcell.NewHexColor(0x000000)
-					cellToUse = tcell.StyleDefault.Background(offPixel)
-				}
-				s.SetCell(col, row, cellToUse)
-			}
-		}
-		s.Show()
-		c8.emulateCycle()
-	}
-
-	s.Fini()
 }
 
 type Chip8 struct {
@@ -143,17 +34,22 @@ type Chip8 struct {
 	V          [16]uint8
 	I          uint16
 	PC         uint16
-	GFX        [screenWidth * screenHeight]uint8
+	GFX        [chscreenWidth * chscreenHeight]uint8
 	DelayTimer uint8
 	SoundTimer uint8
 	Stack      [16]uint16
 	SP         uint16
-	Key        [16]uint8
+	Key        [16]bool
 }
 
 const fontSetSize = 80
-const screenWidth = 64
-const screenHeight = 32
+const chscreenWidth = 64
+const chscreenHeight = 32
+
+const gfxMultiplier = 10
+
+const gfxWidth = chscreenWidth * gfxMultiplier
+const gfxHeight = chscreenHeight * gfxMultiplier
 
 var fontSet [fontSetSize]uint8 = [fontSetSize]uint8{
 	0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
@@ -353,10 +249,10 @@ func (c *Chip8) executeOpcode() bool {
 			pixel = uint16(c.Memory[c.I+yline])
 			for xline := uint16(0); xline < 8; xline++ {
 				if (pixel & (0x80 >> xline)) != 0 {
-					if c.GFX[x+xline+((y+yline)*screenWidth)] == 1 {
+					if c.GFX[x+xline+((y+yline)*chscreenWidth)] == 1 {
 						c.V[0xF] = 1
 					}
-					c.GFX[x+xline+((y+yline)*screenWidth)] ^= 1
+					c.GFX[x+xline+((y+yline)*chscreenWidth)] ^= 1
 				}
 			}
 		}
@@ -367,14 +263,14 @@ func (c *Chip8) executeOpcode() bool {
 		switch c.Opcode & 0x00FF {
 		case 0x009E:
 			// EX9E: Skips the next instruction if the key stored in VX is pressed
-			if c.Key[c.V[(c.Opcode&0x0F00)>>8]] != 0 {
+			if c.Key[c.V[(c.Opcode&0x0F00)>>8]] {
 				c.PC += 4
 			} else {
 				c.PC += 2
 			}
 		case 0x00A1:
 			// EXA1: Skips the next instruction if the key stored in VX isn't pressed
-			if c.Key[c.V[(c.Opcode&0x0F00)>>8]] == 0 {
+			if !c.Key[c.V[(c.Opcode&0x0F00)>>8]] {
 				c.PC += 4
 			} else {
 				c.PC += 2
@@ -391,7 +287,7 @@ func (c *Chip8) executeOpcode() bool {
 		case 0x000A:
 			keyPress := false
 			for i := uint8(0); i < 16; i++ {
-				if c.Key[i] != 0 {
+				if c.Key[i] {
 					c.V[(c.Opcode&0x0F00)>>8] = i
 					keyPress = true
 				}
@@ -465,8 +361,56 @@ func (c *Chip8) updateTimers() {
 	}
 }
 
+func (c *Chip8) input() {
+	c.Key = [16]bool{
+		ebiten.IsKeyPressed(ebiten.KeyX),
+		ebiten.IsKeyPressed(ebiten.Key1),
+		ebiten.IsKeyPressed(ebiten.Key2),
+		ebiten.IsKeyPressed(ebiten.Key3),
+		ebiten.IsKeyPressed(ebiten.KeyQ),
+		ebiten.IsKeyPressed(ebiten.KeyW),
+		ebiten.IsKeyPressed(ebiten.KeyE),
+		ebiten.IsKeyPressed(ebiten.KeyA),
+		ebiten.IsKeyPressed(ebiten.KeyS),
+		ebiten.IsKeyPressed(ebiten.KeyD),
+		ebiten.IsKeyPressed(ebiten.KeyZ),
+		ebiten.IsKeyPressed(ebiten.KeyC),
+		ebiten.IsKeyPressed(ebiten.Key4),
+		ebiten.IsKeyPressed(ebiten.KeyR),
+		ebiten.IsKeyPressed(ebiten.KeyF),
+		ebiten.IsKeyPressed(ebiten.KeyV),
+	}
+}
+
 func randomByte() uint8 {
 	rand.Seed(time.Now().UTC().UnixNano())
 	randint := rand.Intn(math.MaxUint8)
 	return uint8(randint)
+}
+
+// Update is called every tick (1/60 [s]).
+func (g *Chip8) Update() error {
+	g.input()
+	g.emulateCycle()
+	return nil
+}
+
+// Draw is called every frame (typically 1/60[s] for 60Hz display).
+func (g *Chip8) Draw(screen *ebiten.Image) {
+	for row := 0; row < gfxHeight; row++ {
+		for col := 0; col < gfxWidth; col++ {
+			isOn := g.GFX[((row/gfxMultiplier)*chscreenWidth)+(col/gfxMultiplier)] == 1
+			var colorToUse color.Color
+			if isOn {
+				colorToUse = color.White
+			} else {
+				colorToUse = color.Black
+			}
+			screen.Set(col, row, colorToUse)
+		}
+	}
+}
+
+func (g *Chip8) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
+	return gfxWidth, gfxHeight
 }
