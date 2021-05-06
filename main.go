@@ -52,6 +52,56 @@ func gfx(c8 *Chip8) {
 				case tcell.KeyCtrlL:
 					s.Sync()
 				}
+				switch ev.Rune() {
+				case '1':
+					c8.Key = [16]uint8{}
+					c8.Key[0x1] = 1
+				case '2':
+					c8.Key = [16]uint8{}
+					c8.Key[0x2] = 1
+				case '3':
+					c8.Key = [16]uint8{}
+					c8.Key[0x3] = 1
+				case '4':
+					c8.Key = [16]uint8{}
+					c8.Key[0xC] = 1
+				case 'q':
+					c8.Key = [16]uint8{}
+					c8.Key[0x4] = 1
+				case 'w':
+					c8.Key = [16]uint8{}
+					c8.Key[0x5] = 1
+				case 'e':
+					c8.Key = [16]uint8{}
+					c8.Key[0x6] = 1
+				case 'r':
+					c8.Key = [16]uint8{}
+					c8.Key[0xD] = 1
+				case 'a':
+					c8.Key = [16]uint8{}
+					c8.Key[0x7] = 1
+				case 's':
+					c8.Key = [16]uint8{}
+					c8.Key[0x8] = 1
+				case 'd':
+					c8.Key = [16]uint8{}
+					c8.Key[0x9] = 1
+				case 'f':
+					c8.Key = [16]uint8{}
+					c8.Key[0xE] = 1
+				case 'z':
+					c8.Key = [16]uint8{}
+					c8.Key[0xA] = 1
+				case 'x':
+					c8.Key = [16]uint8{}
+					c8.Key[0x0] = 1
+				case 'c':
+					c8.Key = [16]uint8{}
+					c8.Key[0xB] = 1
+				case 'v':
+					c8.Key = [16]uint8{}
+					c8.Key[0xF] = 1
+				}
 			case *tcell.EventResize:
 				s.Sync()
 			}
@@ -98,7 +148,7 @@ type Chip8 struct {
 	SoundTimer uint8
 	Stack      [16]uint16
 	SP         uint16
-	Key        [16]uint16
+	Key        [16]uint8
 }
 
 const fontSetSize = 80
