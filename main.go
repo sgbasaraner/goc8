@@ -2,14 +2,89 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"math"
 	"math/rand"
+	"os"
 	"time"
+
+	"github.com/gdamore/tcell/v2"
 )
 
 func main() {
-	fmt.Println("sa world")
+	programName := os.Args[1]
+	chip := NewChip8()
+
+	fmt.Println("Loading application...")
+	chip.loadApplication(programName)
+	fmt.Println("Loaded application.")
+
+	gfx(&chip)
+}
+
+func gfx(c8 *Chip8) {
+	s, e := tcell.NewScreen()
+	if e != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", e)
+		os.Exit(1)
+	}
+	if e = s.Init(); e != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", e)
+		os.Exit(1)
+	}
+
+	s.SetStyle(tcell.StyleDefault.
+		Foreground(tcell.ColorBlack).
+		Background(tcell.ColorWhite))
+	s.Clear()
+
+	quit := make(chan struct{})
+	go func() {
+		for {
+			ev := s.PollEvent()
+			switch ev := ev.(type) {
+			case *tcell.EventKey:
+				switch ev.Key() {
+				case tcell.KeyEscape:
+					close(quit)
+					return
+				case tcell.KeyCtrlL:
+					s.Sync()
+				}
+			case *tcell.EventResize:
+				s.Sync()
+			}
+		}
+	}()
+
+loop:
+	for {
+		select {
+		case <-quit:
+			break loop
+		case <-time.After(time.Millisecond * 16):
+		}
+
+		for row := 0; row < screenHeight; row++ {
+			for col := 0; col < screenWidth; col++ {
+				isOn := c8.GFX[(row*screenWidth)+col] == 1
+				var cellToUse tcell.Style
+				if isOn {
+					onPixel := tcell.NewHexColor(0xFFFFFF)
+					cellToUse = tcell.StyleDefault.Background(onPixel)
+				} else {
+					offPixel := tcell.NewHexColor(0x000000)
+					cellToUse = tcell.StyleDefault.Background(offPixel)
+				}
+				s.SetCell(col, row, cellToUse)
+			}
+		}
+		s.Show()
+		c8.emulateCycle()
+	}
+
+	s.Fini()
 }
 
 type Chip8 struct {
@@ -18,7 +93,7 @@ type Chip8 struct {
 	V          [16]uint8
 	I          uint16
 	PC         uint16
-	GFX        [2048]uint8
+	GFX        [screenWidth * screenHeight]uint8
 	DelayTimer uint8
 	SoundTimer uint8
 	Stack      [16]uint16
@@ -27,6 +102,8 @@ type Chip8 struct {
 }
 
 const fontSetSize = 80
+const screenWidth = 64
+const screenHeight = 32
 
 var fontSet [fontSetSize]uint8 = [fontSetSize]uint8{
 	0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
@@ -58,6 +135,16 @@ func NewChip8() Chip8 {
 	}
 }
 
+func (c *Chip8) loadApplication(filename string) {
+	bytes, err := ioutil.ReadFile(filename)
+	if err != nil {
+		log.Fatalf("unable to read file %v", filename)
+	}
+	for i, b := range bytes {
+		c.Memory[512+i] = b
+	}
+}
+
 func (c *Chip8) emulateCycle() {
 	c.fetchOpcode()
 	skip := c.executeOpcode()
@@ -83,7 +170,7 @@ func (c *Chip8) executeOpcode() bool {
 		case 0x000E:
 			// 0x00EE: Returns from subroutine
 			c.SP--
-			c.PC = c.Stack[c.PC]
+			c.PC = c.Stack[c.SP]
 			c.PC += 2
 		default:
 			panicUnknownOpcode(c.Opcode)
@@ -207,7 +294,7 @@ func (c *Chip8) executeOpcode() bool {
 	case 0xD000:
 		// DXYN: Draws a sprite at coordinate (VX, VY) that has a width of 8 pixels and a height of N pixels.
 		x := uint16(c.V[(c.Opcode&0x0F00)>>8])
-		y := uint16(c.V[(c.Opcode&0x0F00)>>4])
+		y := uint16(c.V[(c.Opcode&0x00F0)>>4])
 		height := uint16(c.Opcode & 0x000F)
 		var pixel uint16
 
@@ -216,10 +303,10 @@ func (c *Chip8) executeOpcode() bool {
 			pixel = uint16(c.Memory[c.I+yline])
 			for xline := uint16(0); xline < 8; xline++ {
 				if (pixel & (0x80 >> xline)) != 0 {
-					if c.GFX[x+xline+((y+yline)*64)] == 1 {
+					if c.GFX[x+xline+((y+yline)*screenWidth)] == 1 {
 						c.V[0xF] = 1
 					}
-					c.GFX[x+xline+((y+yline)*64)] ^= 1
+					c.GFX[x+xline+((y+yline)*screenWidth)] ^= 1
 				}
 			}
 		}
