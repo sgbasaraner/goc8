@@ -13,15 +13,18 @@ import (
 )
 
 func main() {
+	if len(os.Args) < 2 {
+		log.Fatal("Usage: goc8 [c8 file name]")
+	}
+
 	programName := os.Args[1]
+
 	chip := NewChip8()
 
 	chip.loadApplication(programName)
 
-	// Specify the window size as you like. Here, a doubled size is specified.
 	ebiten.SetWindowSize(gfxWidth, gfxHeight)
 	ebiten.SetWindowTitle(programName)
-	// Call ebiten.RunGame to start your game loop.
 	if err := ebiten.RunGame(&chip); err != nil {
 		log.Fatal(err)
 	}
